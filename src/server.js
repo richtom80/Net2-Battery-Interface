@@ -11,7 +11,23 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const ROOT = path.join(__dirname, '..');
 
-app.use(express.static(path.join(ROOT, 'public')));
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').replace('::ffff:', '');
+    console.log(`${new Date().toISOString()} ${ip} ${req.method} ${req.originalUrl} ${res.statusCode} ${Date.now() - start}ms`);
+  });
+  next();
+});
+
+app.use(express.static(path.join(ROOT, 'public'), {
+  etag: false,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-store, must-revalidate');
+    }
+  },
+}));
 
 app.get('/api/battery-levels', async (req, res) => {
   try {
