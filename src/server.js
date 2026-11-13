@@ -6,6 +6,7 @@ const express = require('express');
 const { getBatteryLevels } = require('./queries/batteryLevels');
 const { getDoorAccess } = require('./queries/doorAccess');
 const { getUsers, getUserDoors, getDoorsWithUsers } = require('./queries/accessAudit');
+const { getUserActivity } = require('./queries/accessReview');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -70,6 +71,15 @@ app.get('/api/door-users', async (req, res) => {
   }
 });
 
+app.get('/api/user-activity', async (req, res) => {
+  try {
+    const { rows, counts } = await getUserActivity();
+    res.json({ ok: true, users: rows, counts, fetchedAt: new Date().toISOString() });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 function pythonCmd() {
   const venv = process.platform === 'win32'
     ? path.join(ROOT, '.venv', 'Scripts', 'python.exe')
@@ -122,6 +132,20 @@ app.get('/api/user-doors.pdf', async (req, res) => {
     const payload = JSON.stringify({ kind: 'user', generatedAt: new Date().toISOString(), user, rows: doors });
     const safe = (user.name || 'user').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
     streamPdf(res, [ACCESS_REPORT], payload, `access-by-user-${safe}.pdf`);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/user-activity.pdf', async (req, res) => {
+  try {
+    const { rows } = await getUserActivity();
+    const buckets = String(req.query.buckets || '').split(',').filter(Boolean);
+    const filtered = buckets.length ? rows.filter((r) => buckets.includes(r.bucket)) : rows;
+    const filterLabel = buckets.length ? `Filtered to: ${buckets.join(', ')}` : 'All active users';
+    const payload = JSON.stringify({ kind: 'review', generatedAt: new Date().toISOString(), filterLabel, rows: filtered });
+    const date = new Date().toISOString().slice(0, 10);
+    streamPdf(res, [ACCESS_REPORT], payload, `access-review-${date}.pdf`);
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

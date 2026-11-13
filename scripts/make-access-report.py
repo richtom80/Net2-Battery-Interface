@@ -100,6 +100,10 @@ def build(data, out):
         if u.get("department"):
             meta_bits.append(u["department"])
         meta_text = "  ·  ".join(meta_bits)
+    elif kind == "review":
+        title_text = "Access Review"
+        sub_text = "Active users by how long since a credential was last used"
+        meta_text = data.get("filterLabel", "")
     else:
         title_text = "Door Access Audit"
         sub_text = "All doors and the users who can open them"
@@ -128,6 +132,43 @@ def build(data, out):
     story += [Spacer(1, 8), Rule(usable_w), Spacer(1, 12)]
 
     rows = data.get("rows", [])
+
+    if kind == "review":
+        col_w = [52 * mm, 50 * mm, 44 * mm, usable_w - 146 * mm]
+        table_data = [[Paragraph(x, head) for x in ["User", "Department", "Access level", "Last used"]]]
+        for r in rows:
+            days = r.get("daysSince")
+            if r.get("lastAccess"):
+                try:
+                    d = datetime.fromisoformat(r["lastAccess"].replace("Z", "+00:00")).astimezone().strftime("%d %b %Y")
+                except Exception:
+                    d = "unknown"
+                last = f'{d}<br/><font size="7.5" color="#8A98A8">{days} day{"" if days == 1 else "s"} ago</font>'
+            else:
+                last = '<font color="#C13329">Never used</font>'
+            table_data.append([
+                Paragraph(r.get("name") or "", cell_room),
+                Paragraph(r.get("department") or "—", cell),
+                Paragraph(r.get("accessLevel") or "—", cell),
+                Paragraph(last, cell),
+            ])
+        summary = f"{len(rows)} user{'' if len(rows) == 1 else 's'}"
+        story.insert(len(story), Paragraph(summary, ParagraphStyle("sum", fontName="Helvetica", fontSize=9.5, textColor=INK_SOFT, spaceAfter=10)))
+        table = Table(table_data, colWidths=col_w, repeatRows=1)
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), INK),
+            ("TOPPADDING", (0, 0), (-1, 0), 7), ("BOTTOMPADDING", (0, 0), (-1, 0), 7),
+            ("LEFTPADDING", (0, 0), (-1, -1), 7), ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+            ("TOPPADDING", (0, 1), (-1, -1), 7), ("BOTTOMPADDING", (0, 1), (-1, -1), 7),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("GRID", (0, 0), (-1, -1), 0.5, LINE_SOFT),
+            ("LINEBELOW", (0, 0), (-1, 0), 0.5, INK),
+            ("BOX", (0, 0), (-1, -1), 0.8, LINE),
+        ]))
+        story.append(table)
+        doc.build(story, onFirstPage=header_footer, onLaterPages=header_footer)
+        return
+
     parsed = []
     for r in rows:
         room, floor, rank = parse_name(r.get("peripheralName"))

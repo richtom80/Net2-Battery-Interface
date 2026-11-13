@@ -106,9 +106,12 @@
   .tally::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--tc, var(--line-strong)); }
   .tally .n { font-size: 40px; font-weight: 700; line-height: 1; letter-spacing: -0.03em; color: var(--tc, var(--ink)); font-variant-numeric: tabular-nums; }
   .tally .lbl { font-size: 13px; color: var(--ink-soft); font-weight: 500; }
-  .tally[data-state="critical"] { --tc: var(--critical); }
-  .tally[data-state="low"] { --tc: var(--low); }
-  .tally[data-state="healthy"] { --tc: var(--healthy); }
+  .tally[data-state="critical"], .tally[data-bucket="never"] { --tc: var(--critical); }
+  .tally[data-state="low"], .tally[data-bucket="90d+"] { --tc: var(--low); }
+  .tally[data-state="healthy"], .tally[data-bucket="<30d"] { --tc: var(--healthy); }
+  .tally[data-bucket="30-90d"] { --tc: var(--ink-soft); }
+  .tallies4 { grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 760px) { .tallies, .tallies4 { grid-template-columns: repeat(2, 1fr); } }
   .tally[aria-pressed="true"] { border-color: var(--tc); background: color-mix(in srgb, var(--tc) 8%, var(--surface)); }
   .tally:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .tally:hover { border-color: var(--line-strong); }
@@ -162,6 +165,11 @@
   .seen { font-size: 13px; color: var(--ink-soft); white-space: nowrap; }
   .seen.stale { color: var(--low); }
 
+  .lastused { font-size: 13px; white-space: nowrap; }
+  .lastused .ago { display: block; font-size: 11.5px; color: var(--ink-faint); margin-top: 1px; }
+  .lastused.never { color: var(--critical); font-weight: 600; }
+  .lastused.old { color: var(--low); }
+
   .access { font-size: 13px; }
   .access > summary {
     list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
@@ -214,6 +222,7 @@
         <button role="tab" data-report="battery" aria-selected="true">Battery status</button>
         <button role="tab" data-report="user" aria-selected="false">Access by user</button>
         <button role="tab" data-report="door" aria-selected="false">Access by door</button>
+        <button role="tab" data-report="review" aria-selected="false">Access review</button>
       </div>
     </nav>
 
@@ -289,6 +298,41 @@
         <div class="msg" id="doormsg">Loading&hellip;</div>
       </div>
     </section>
+
+    <!-- ============ Access review ============ -->
+    <section id="view-review" hidden>
+      <div class="tallies tallies4" id="revtallies" hidden>
+        <button class="tally" data-bucket="never" aria-pressed="false" type="button">
+          <span class="n" id="rn-never">0</span><span class="lbl">Never used</span>
+        </button>
+        <button class="tally" data-bucket="90d+" aria-pressed="false" type="button">
+          <span class="n" id="rn-90">0</span><span class="lbl">90+ days ago</span>
+        </button>
+        <button class="tally" data-bucket="30-90d" aria-pressed="false" type="button">
+          <span class="n" id="rn-3090">0</span><span class="lbl">30&ndash;90 days</span>
+        </button>
+        <button class="tally" data-bucket="&lt;30d" aria-pressed="false" type="button">
+          <span class="n" id="rn-30">0</span><span class="lbl">Within 30 days</span>
+        </button>
+      </div>
+      <div class="picker">
+        <input class="field" id="revfilter" type="search" placeholder="Filter by name, department or access level&hellip;" autocomplete="off" />
+        <span class="selnote" id="revselnote">All active users</span>
+        <a class="btn ghost" id="revpdf" href="/api/user-activity.pdf">Download PDF</a>
+      </div>
+      <div class="panel">
+        <div class="scroll">
+          <table id="revtbl" hidden>
+            <thead><tr>
+              <th scope="col">User</th><th scope="col">Department</th>
+              <th scope="col">Access level</th><th scope="col">Last used</th>
+            </tr></thead>
+            <tbody id="revrows"></tbody>
+          </table>
+        </div>
+        <div class="msg" id="revmsg">Loading&hellip;</div>
+      </div>
+    </section>
   </div>
 
 <script>
@@ -296,7 +340,8 @@ const STALE_MS = 7 * 24 * 60 * 60 * 1000;
 let bstate = { sortKey: "battery", dir: "asc", filter: null, firstPaint: true };
 let locks = [];
 let doorAudit = [];
-let usersLoaded = false, doorLoaded = false;
+let usersLoaded = false, doorLoaded = false, reviewLoaded = false;
+let reviewUsers = [], reviewBucket = null;
 
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
@@ -332,16 +377,19 @@ function switchReport(name) {
   document.getElementById('view-battery').hidden = name !== 'battery';
   document.getElementById('view-user').hidden = name !== 'user';
   document.getElementById('view-door').hidden = name !== 'door';
+  document.getElementById('view-review').hidden = name !== 'review';
   document.getElementById('download').hidden = name !== 'battery';
   document.getElementById('refresh').hidden = name !== 'battery';
 
-  const title = { battery: "Lock Battery Status", user: "Access by User", door: "Access by Door" }[name];
+  const title = { battery: "Lock Battery Status", user: "Access by User", door: "Access by Door", review: "Access Review" }[name];
   document.getElementById('title').textContent = title;
 
   if (name === 'user' && !usersLoaded) loadUsers();
   if (name === 'door' && !doorLoaded) loadDoorAudit();
+  if (name === 'review' && !reviewLoaded) loadReview();
   if (name === 'user') document.getElementById('sub').textContent = "Pick a person to audit the doors they can open.";
   if (name === 'door') document.getElementById('sub').textContent = "Every door and the active users who can open it.";
+  if (name === 'review') document.getElementById('sub').textContent = "Active users ranked by how long since a credential was last used.";
 }
 
 document.querySelectorAll('.reportnav button').forEach(b =>
@@ -568,6 +616,75 @@ async function loadDoorAudit() {
   }
 }
 document.getElementById("doorfilter").addEventListener("input", renderDoorAudit);
+
+/* ---------- Access review ---------- */
+function lastUsedCell(u) {
+  if (!u.lastAccess) return '<span class="lastused never">Never used</span>';
+  const d = new Date(u.lastAccess).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  const cls = u.daysSince >= 90 ? "old" : "";
+  const ago = u.daysSince === 0 ? "today" : u.daysSince + (u.daysSince === 1 ? " day ago" : " days ago");
+  return `<span class="lastused ${cls}">${esc(d)}<span class="ago">${esc(ago)}</span></span>`;
+}
+
+function updateReviewPdf() {
+  const note = document.getElementById("revselnote"), pdf = document.getElementById("revpdf");
+  if (reviewBucket) {
+    note.textContent = reviewBucket === "never" ? "Never used" : reviewBucket === "90d+" ? "90+ days" : reviewBucket === "30-90d" ? "30–90 days" : "Within 30 days";
+    pdf.href = "/api/user-activity.pdf?buckets=" + encodeURIComponent(reviewBucket);
+  } else {
+    note.textContent = "All active users";
+    pdf.href = "/api/user-activity.pdf";
+  }
+}
+
+function renderReview() {
+  const rowsEl = document.getElementById("revrows"), tbl = document.getElementById("revtbl"), msg = document.getElementById("revmsg");
+  const q = document.getElementById("revfilter").value.trim().toLowerCase();
+  let list = reviewUsers;
+  if (reviewBucket) list = list.filter(u => u.bucket === reviewBucket);
+  if (q) list = list.filter(u => (u.name + " " + u.department + " " + u.accessLevel).toLowerCase().includes(q));
+  updateReviewPdf();
+  if (!list.length) { tbl.hidden = true; msg.hidden = false; msg.className = "msg"; msg.textContent = "No users match this view."; return; }
+  tbl.hidden = false; msg.hidden = true;
+  rowsEl.innerHTML = list.map(u => `
+    <tr>
+      <td class="loc"><div class="room">${esc(u.name)}</div></td>
+      <td>${esc(u.department || "—")}</td>
+      <td>${esc(u.accessLevel || "—")}</td>
+      <td>${lastUsedCell(u)}</td>
+    </tr>`).join("");
+}
+
+async function loadReview() {
+  reviewLoaded = true;
+  const msg = document.getElementById("revmsg");
+  try {
+    const res = await fetch("/api/user-activity");
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "Unknown error");
+    reviewUsers = data.users || [];
+    document.getElementById("rn-never").textContent = data.counts["never"] || 0;
+    document.getElementById("rn-90").textContent = data.counts["90d+"] || 0;
+    document.getElementById("rn-3090").textContent = data.counts["30-90d"] || 0;
+    document.getElementById("rn-30").textContent = data.counts["<30d"] || 0;
+    document.getElementById("revtallies").hidden = false;
+    renderReview();
+  } catch (err) {
+    reviewLoaded = false;
+    document.getElementById("revtbl").hidden = true; document.getElementById("revtallies").hidden = true;
+    msg.hidden = false; msg.className = "msg err"; msg.textContent = "Couldn't load the access review. " + err.message;
+  }
+}
+
+document.querySelectorAll("#revtallies .tally").forEach(t => {
+  t.addEventListener("click", () => {
+    const b = t.dataset.bucket;
+    reviewBucket = reviewBucket === b ? null : b;
+    document.querySelectorAll("#revtallies .tally").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.bucket === reviewBucket)));
+    renderReview();
+  });
+});
+document.getElementById("revfilter").addEventListener("input", renderReview);
 
 loadBattery();
 </script>
