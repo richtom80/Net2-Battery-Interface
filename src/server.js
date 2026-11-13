@@ -4,6 +4,7 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 const express = require('express');
 const { getBatteryLevels } = require('./queries/batteryLevels');
+const { getDoorAccess } = require('./queries/doorAccess');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -13,8 +14,12 @@ app.use(express.static(path.join(ROOT, 'public')));
 
 app.get('/api/battery-levels', async (req, res) => {
   try {
-    const levels = await getBatteryLevels();
-    res.json({ ok: true, levels, fetchedAt: new Date().toISOString() });
+    const [levels, access] = await Promise.all([getBatteryLevels(), getDoorAccess()]);
+    const withAccess = levels.map((l) => {
+      const a = access.get(l.serialNumber) || { users: '', userCount: 0 };
+      return { ...l, users: a.users, userCount: a.userCount };
+    });
+    res.json({ ok: true, levels: withAccess, fetchedAt: new Date().toISOString() });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
