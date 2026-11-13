@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lock Battery Status</title>
+<meta name="description" content="Battery triage console for Paxton Net2 wireless door locks." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #edf0f4;
+    --surface: #ffffff;
+    --surface-2: #f5f7fa;
+    --ink: #16202e;
+    --ink-soft: #5b6b7d;
+    --ink-faint: #8a98a8;
+    --line: #dce2e9;
+    --line-strong: #c3ccd6;
+    --critical: #d5372f;
+    --low: #c7791a;
+    --healthy: #1c9a67;
+    --accent: #2e5bff;
+    --meter-empty: #e4e9ef;
+    --shadow: 0 1px 2px rgba(22,32,46,.06), 0 8px 24px rgba(22,32,46,.05);
+    --radius: 10px;
+  }
+  :root[data-theme="dark"], :root:not([data-theme="light"]) {}
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e1620;
+      --surface: #15202d;
+      --surface-2: #1b2835;
+      --ink: #e7edf4;
+      --ink-soft: #92a3b6;
+      --ink-faint: #6b7d90;
+      --line: #263340;
+      --line-strong: #324150;
+      --critical: #f0675e;
+      --low: #e4a24d;
+      --healthy: #38cb8c;
+      --accent: #6a8dff;
+      --meter-empty: #223040;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1620; --surface: #15202d; --surface-2: #1b2835;
+    --ink: #e7edf4; --ink-soft: #92a3b6; --ink-faint: #6b7d90;
+    --line: #263340; --line-strong: #324150;
+    --critical: #f0675e; --low: #e4a24d; --healthy: #38cb8c; --accent: #6a8dff;
+    --meter-empty: #223040; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 40px 16px 72px; }
+
+  /* Header */
+  header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 24px; margin-bottom: 28px; }
+  h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 4px; }
+  .sub { color: var(--ink-soft); font-size: 14px; }
+  .sub b { color: var(--ink); font-weight: 600; }
+  .refresh {
+    display: inline-flex; align-items: center; gap: 8px;
+    font: inherit; font-weight: 600; font-size: 14px;
+    color: var(--surface); background: var(--ink);
+    border: none; border-radius: 8px; padding: 9px 16px; cursor: pointer;
+    transition: opacity .15s ease;
+  }
+  .refresh:hover { opacity: .88; }
+  .refresh:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .refresh .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--healthy); }
+  .refresh[aria-busy="true"] .dot { animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+
+  /* Tallies / filters */
+  .tallies { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+  .tally {
+    text-align: left; font: inherit; cursor: pointer;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 16px 18px;
+    display: flex; flex-direction: column; gap: 2px;
+    box-shadow: var(--shadow); transition: border-color .15s ease, background .15s ease;
+    position: relative; overflow: hidden;
+  }
+  .tally::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--tc, var(--line-strong)); }
+  .tally .n { font-size: 40px; font-weight: 700; line-height: 1; letter-spacing: -0.03em; color: var(--tc, var(--ink)); font-variant-numeric: tabular-nums; }
+  .tally .lbl { font-size: 13px; color: var(--ink-soft); font-weight: 500; }
+  .tally[data-state="critical"] { --tc: var(--critical); }
+  .tally[data-state="low"] { --tc: var(--low); }
+  .tally[data-state="healthy"] { --tc: var(--healthy); }
+  .tally[aria-pressed="true"] { border-color: var(--tc); background: color-mix(in srgb, var(--tc) 8%, var(--surface)); }
+  .tally:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .tally:hover { border-color: var(--line-strong); }
+
+  /* Table */
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 720px; }
+  thead th {
+    position: sticky; top: 0; z-index: 1;
+    background: var(--surface-2); color: var(--ink-soft);
+    font-size: 12.5px; font-weight: 600; text-align: left;
+    padding: 12px 16px; border-bottom: 1px solid var(--line);
+    white-space: nowrap; cursor: pointer; user-select: none;
+  }
+  thead th:hover { color: var(--ink); }
+  thead th:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  thead th .arrow { display: inline-block; width: 12px; color: var(--accent); opacity: 0; transform: translateY(1px); }
+  thead th[aria-sort="ascending"] .arrow,
+  thead th[aria-sort="descending"] .arrow { opacity: 1; }
+  thead th.num, tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  tbody td { padding: 13px 16px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr { position: relative; }
+  tbody td.loc { border-left: 4px solid var(--rc, transparent); }
+  tbody tr[data-state="critical"] { --rc: var(--critical); }
+  tbody tr[data-state="low"] { --rc: var(--low); }
+  tbody tr[data-state="healthy"] { --rc: var(--healthy); }
+  tbody tr:hover td { background: var(--surface-2); }
+
+  .room { font-weight: 600; letter-spacing: -0.01em; }
+  .serial { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--ink-faint); margin-top: 2px; }
+  .floor { display: inline-block; font-size: 12px; font-weight: 600; color: var(--ink-soft); background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; padding: 2px 7px; min-width: 38px; text-align: center; }
+
+  /* Battery meter */
+  .battery { display: flex; align-items: center; gap: 12px; }
+  .meter { display: flex; gap: 2px; width: 150px; }
+  .seg { flex: 1; height: 20px; border-radius: 2px; background: var(--meter-empty); transform-origin: bottom; }
+  .seg.on { background: var(--mc); }
+  .reveal .seg.on { animation: fill .5s cubic-bezier(.2,.7,.3,1) backwards; }
+  @keyframes fill { from { transform: scaleY(0); opacity: 0; } }
+  .bval { font-family: "IBM Plex Mono", monospace; font-weight: 500; font-size: 13px; color: var(--mc); min-width: 42px; }
+
+  /* Signal */
+  .signal { display: inline-flex; align-items: flex-end; gap: 2px; height: 16px; }
+  .sbar { width: 4px; border-radius: 1px; background: var(--meter-empty); }
+  .sbar:nth-child(1) { height: 6px; } .sbar:nth-child(2) { height: 9px; }
+  .sbar:nth-child(3) { height: 12px; } .sbar:nth-child(4) { height: 16px; }
+  .sbar.on { background: var(--ink-soft); }
+  .sraw { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--ink-faint); margin-left: 8px; }
+
+  .status { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; }
+  .status .d { width: 8px; height: 8px; border-radius: 50%; }
+  .status.online .d { background: var(--healthy); }
+  .status.offline .d { background: var(--ink-faint); }
+  .status.offline { color: var(--ink-soft); }
+
+  .seen { font-size: 13px; color: var(--ink-soft); white-space: nowrap; }
+  .seen.stale { color: var(--low); }
+
+  .msg { padding: 48px 24px; text-align: center; color: var(--ink-soft); }
+  .msg.err { color: var(--critical); }
+
+  @media (max-width: 560px) {
+    .wrap { padding: 28px 16px 56px; }
+    h1 { font-size: 23px; }
+    .tally .n { font-size: 32px; }
+    .meter { width: 108px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal .seg.on { animation: none; }
+    .refresh[aria-busy="true"] .dot { animation: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Lock Battery Status</h1>
+        <div class="sub" id="sub">Reading from Net2&hellip;</div>
+      </div>
+      <button class="refresh" id="refresh" type="button"><span class="dot"></span>Refresh</button>
+    </header>
+
+    <div class="tallies" id="tallies" hidden>
+      <button class="tally" data-state="critical" aria-pressed="false" type="button">
+        <span class="n" id="n-critical">0</span><span class="lbl">Critical &middot; replace now</span>
+      </button>
+      <button class="tally" data-state="low" aria-pressed="false" type="button">
+        <span class="n" id="n-low">0</span><span class="lbl">Low &middot; plan a swap</span>
+      </button>
+      <button class="tally" data-state="healthy" aria-pressed="false" type="button">
+        <span class="n" id="n-healthy">0</span><span class="lbl">Healthy</span>
+      </button>
+    </div>
+
+    <div class="panel">
+      <div class="scroll">
+        <table id="tbl" hidden>
+          <thead>
+            <tr>
+              <th data-key="location" tabindex="0" scope="col">Location <span class="arrow"></span></th>
+              <th data-key="floor" tabindex="0" scope="col">Floor <span class="arrow"></span></th>
+              <th data-key="battery" tabindex="0" scope="col">Battery <span class="arrow"></span></th>
+              <th data-key="signal" tabindex="0" scope="col">Signal <span class="arrow"></span></th>
+              <th data-key="online" tabindex="0" scope="col">Status <span class="arrow"></span></th>
+              <th data-key="lastReported" tabindex="0" scope="col">Last seen <span class="arrow"></span></th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div class="msg" id="msg">Loading&hellip;</div>
+    </div>
+  </div>
+
+<script>
+const STALE_MS = 7 * 24 * 60 * 60 * 1000;
+let state = { sortKey: "battery", dir: "asc", filter: null, firstPaint: true };
+let locks = [];
+
+function batteryState(level) {
+  if (level == null) return "healthy";
+  if (level <= 2) return "critical";
+  if (level <= 4) return "low";
+  return "healthy";
+}
+function meterColor(s) {
+  return s === "critical" ? "var(--critical)" : s === "low" ? "var(--low)" : "var(--healthy)";
+}
+
+// Pull the location out of {...} or (...) — the data mixes both and some
+// pairs are mismatched, e.g. "(OFFICE 18 1FL}". Fall back to a cleaned name.
+function parseName(raw) {
+  const name = (raw || "").trim();
+  const m = name.match(/[\{\(\[]\s*([^\{\}\(\)\[\]]+?)\s*[\}\)\]]/);
+  let loc = m ? m[1] : name.replace(/^\d+\s*-\s*/, "").replace(/\bACU\s*\d+\b/i, "").replace(/\s{2,}/g, " ").trim();
+  const fm = loc.match(/\b(GRD\s*FL|\d+\s*FL)\b/i);
+  let floor = "", floorRank = 99, room = loc;
+  if (fm) {
+    const f = fm[1].toUpperCase().replace(/\s+/g, "");
+    floor = f === "GRDFL" ? "GRD" : f;
+    floorRank = f === "GRDFL" ? 0 : parseInt(f, 10);
+    room = loc.replace(fm[0], "").replace(/\s{2,}/g, " ").trim();
+  }
+  if (!room) room = loc || name;
+  return { room, floor, floorRank };
+}
+
+function row(l) {
+  const s = batteryState(l.batteryLevel);
+  const mc = meterColor(s);
+  const lvl = l.batteryLevel == null ? 0 : l.batteryLevel;
+  let segs = "";
+  for (let i = 1; i <= 10; i++) {
+    const on = i <= lvl;
+    const delay = on ? `style="animation-delay:${i * 28}ms;--mc:${mc}"` : `style="--mc:${mc}"`;
+    segs += `<div class="seg ${on ? "on" : ""}" ${delay}></div>`;
+  }
+  const bars = Math.max(0, Math.min(4, Math.ceil((l.signalStrength || 0) / 255 * 4)));
+  let sig = "";
+  for (let i = 1; i <= 4; i++) sig += `<span class="sbar ${i <= bars ? "on" : ""}"></span>`;
+
+  const ts = l.lastReported ? new Date(l.lastReported) : null;
+  const stale = ts && (Date.now() - ts.getTime() > STALE_MS);
+  const seen = ts ? ts.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
+  const serial = l.serialNumber != null ? "ACU " + String(l.serialNumber).padStart(8, "0") : "";
+
+  return `<tr data-state="${s}">
+    <td class="loc"><div class="room">${esc(l._room)}</div><div class="serial">${esc(serial)}</div></td>
+    <td>${l._floor ? `<span class="floor">${esc(l._floor)}</span>` : ""}</td>
+    <td><div class="battery"><div class="meter">${segs}</div><span class="bval" style="--mc:${mc}">${lvl}/10</span></div></td>
+    <td><span class="signal">${sig}</span><span class="sraw">${l.signalStrength ?? "—"}</span></td>
+    <td><span class="status ${l.online ? "online" : "offline"}"><span class="d"></span>${l.online ? "Online" : "Offline"}</span></td>
+    <td><span class="seen ${stale ? "stale" : ""}">${esc(seen)}</span></td>
+  </tr>`;
+}
+
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+function compare(a, b) {
+  const k = state.sortKey;
+  let av, bv;
+  if (k === "location") { av = a._room.toLowerCase(); bv = b._room.toLowerCase(); }
+  else if (k === "floor") { av = a._floorRank; bv = b._floorRank; }
+  else if (k === "online") { av = a.online ? 1 : 0; bv = b.online ? 1 : 0; }
+  else if (k === "lastReported") { av = a.lastReported ? new Date(a.lastReported).getTime() : 0; bv = b.lastReported ? new Date(b.lastReported).getTime() : 0; }
+  else { const f = k === "battery" ? "batteryLevel" : k === "signal" ? "signalStrength" : k; av = a[f] ?? -1; bv = b[f] ?? -1; }
+  if (av < bv) return state.dir === "asc" ? -1 : 1;
+  if (av > bv) return state.dir === "asc" ? 1 : -1;
+  return a._room.toLowerCase() < b._room.toLowerCase() ? -1 : 1;
+}
+
+function render() {
+  const rowsEl = document.getElementById("rows");
+  const tbl = document.getElementById("tbl");
+  const msg = document.getElementById("msg");
+
+  let list = locks.slice();
+  if (state.filter) list = list.filter(l => batteryState(l.batteryLevel) === state.filter);
+  list.sort(compare);
+
+  document.querySelectorAll("thead th").forEach(th => {
+    th.setAttribute("aria-sort", th.dataset.key === state.sortKey ? (state.dir === "asc" ? "ascending" : "descending") : "none");
+    th.querySelector(".arrow").textContent = th.dataset.key === state.sortKey ? (state.dir === "asc" ? "▲" : "▼") : "";
+  });
+
+  if (!list.length) {
+    tbl.hidden = true; msg.hidden = false; msg.className = "msg";
+    msg.textContent = state.filter ? "No locks in this band." : "No wireless locks are reporting.";
+    return;
+  }
+  tbl.hidden = false; msg.hidden = true;
+  rowsEl.innerHTML = list.map(row).join("");
+  rowsEl.classList.toggle("reveal", state.firstPaint);
+  state.firstPaint = false;
+}
+
+function tallies() {
+  const c = { critical: 0, low: 0, healthy: 0 };
+  locks.forEach(l => c[batteryState(l.batteryLevel)]++);
+  document.getElementById("n-critical").textContent = c.critical;
+  document.getElementById("n-low").textContent = c.low;
+  document.getElementById("n-healthy").textContent = c.healthy;
+  document.getElementById("tallies").hidden = false;
+}
+
+async function load() {
+  const btn = document.getElementById("refresh");
+  const msg = document.getElementById("msg");
+  btn.setAttribute("aria-busy", "true");
+  try {
+    const res = await fetch("/api/battery-levels");
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "Unknown error");
+    locks = (data.levels || []).map(l => {
+      const p = parseName(l.door);
+      return { ...l, _room: p.room, _floor: p.floor, _floorRank: p.floorRank };
+    });
+    const when = new Date(data.fetchedAt).toLocaleString(undefined, { hour: "2-digit", minute: "2-digit" });
+    document.getElementById("sub").innerHTML = `<b>${locks.length}</b> wireless locks &middot; synced ${when} &middot; sorted by battery, lowest first`;
+    state.firstPaint = true;
+    tallies();
+    render();
+  } catch (err) {
+    document.getElementById("tbl").hidden = true;
+    document.getElementById("tallies").hidden = true;
+    msg.hidden = false; msg.className = "msg err";
+    msg.textContent = "Couldn't reach the battery data. " + err.message;
+  } finally {
+    btn.removeAttribute("aria-busy");
+  }
+}
+
+document.querySelectorAll("thead th").forEach(th => {
+  const key = th.dataset.key;
+  const activate = () => {
+    if (state.sortKey === key) state.dir = state.dir === "asc" ? "desc" : "asc";
+    else { state.sortKey = key; state.dir = (key === "lastReported" || key === "battery") ? (key === "battery" ? "asc" : "desc") : "asc"; }
+    render();
+  };
+  th.addEventListener("click", activate);
+  th.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(); } });
+});
+
+document.querySelectorAll(".tally").forEach(t => {
+  t.addEventListener("click", () => {
+    const s = t.dataset.state;
+    state.filter = state.filter === s ? null : s;
+    document.querySelectorAll(".tally").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.state === state.filter)));
+    render();
+  });
+});
+
+document.getElementById("refresh").addEventListener("click", load);
+load();
+</script>
+</body>
+</html>

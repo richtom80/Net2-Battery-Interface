@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+.venv/
+
+# Secrets / local config — never commit
+.env
+
+# Generated operational data (contains real door names / locations)
+scripts/discovery-results.json
+reports/
+*.pdf
+battery-data.json
+
+# OS
+.DS_Store
