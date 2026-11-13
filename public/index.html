@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Lock Battery Status</title>
-<meta name="description" content="Battery triage console for Paxton Net2 wireless door locks." />
+<title>Net2 Battery Interface</title>
+<meta name="description" content="Battery triage and door-access audit for Paxton Net2 wireless locks." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -27,23 +27,13 @@
     --shadow: 0 1px 2px rgba(22,32,46,.06), 0 8px 24px rgba(22,32,46,.05);
     --radius: 10px;
   }
-  :root[data-theme="dark"], :root:not([data-theme="light"]) {}
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #0e1620;
-      --surface: #15202d;
-      --surface-2: #1b2835;
-      --ink: #e7edf4;
-      --ink-soft: #92a3b6;
-      --ink-faint: #6b7d90;
-      --line: #263340;
-      --line-strong: #324150;
-      --critical: #f0675e;
-      --low: #e4a24d;
-      --healthy: #38cb8c;
-      --accent: #6a8dff;
-      --meter-empty: #223040;
-      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+      --bg: #0e1620; --surface: #15202d; --surface-2: #1b2835;
+      --ink: #e7edf4; --ink-soft: #92a3b6; --ink-faint: #6b7d90;
+      --line: #263340; --line-strong: #324150;
+      --critical: #f0675e; --low: #e4a24d; --healthy: #38cb8c; --accent: #6a8dff;
+      --meter-empty: #223040; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
     }
   }
   :root[data-theme="dark"] {
@@ -57,44 +47,59 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; }
   body {
-    background: var(--bg);
-    color: var(--ink);
+    background: var(--bg); color: var(--ink);
     font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
-    font-size: 15px;
-    line-height: 1.5;
-    -webkit-font-smoothing: antialiased;
+    font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased;
   }
   .wrap { max-width: 1060px; margin: 0 auto; padding: 40px 16px 72px; }
 
-  /* Header */
-  header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 24px; margin-bottom: 28px; }
+  header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 24px; margin-bottom: 18px; }
   h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 4px; }
   .sub { color: var(--ink-soft); font-size: 14px; }
   .sub b { color: var(--ink); font-weight: 600; }
+
   .actions { display: flex; align-items: center; gap: 10px; }
   .btn {
     display: inline-flex; align-items: center; gap: 8px;
     font: inherit; font-weight: 600; font-size: 14px;
     border-radius: 8px; padding: 9px 16px; cursor: pointer;
-    transition: opacity .15s ease, background .15s ease, border-color .15s ease;
-    text-decoration: none;
+    transition: opacity .15s ease, background .15s ease, border-color .15s ease; text-decoration: none;
   }
   .refresh { color: var(--surface); background: var(--ink); border: 1px solid var(--ink); }
   .refresh:hover { opacity: .88; }
   .ghost { color: var(--ink); background: transparent; border: 1px solid var(--line-strong); }
   .ghost:hover { border-color: var(--ink); background: var(--surface); }
   .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .refresh .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--healthy); }
-  .refresh[aria-busy="true"] .dot { animation: pulse 1s ease-in-out infinite; }
-  @keyframes pulse { 50% { opacity: .3; } }
+  .btn[hidden] { display: none; }
 
-  /* Tallies / filters */
+  /* Report switcher */
+  .reportnav { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; flex-wrap: wrap; }
+  .reportnav .seg { display: inline-flex; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 3px; box-shadow: var(--shadow); }
+  .reportnav button {
+    font: inherit; font-weight: 600; font-size: 14px; color: var(--ink-soft);
+    background: transparent; border: none; border-radius: 7px; padding: 8px 15px; cursor: pointer;
+    transition: color .15s ease, background .15s ease;
+  }
+  .reportnav button:hover { color: var(--ink); }
+  .reportnav button[aria-selected="true"] { color: var(--surface); background: var(--ink); }
+  .reportnav button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* Pickers */
+  .picker { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .picker label { font-size: 14px; color: var(--ink-soft); font-weight: 600; }
+  .field {
+    font: inherit; font-size: 14px; color: var(--ink);
+    background: var(--surface); border: 1px solid var(--line-strong);
+    border-radius: 8px; padding: 9px 12px; min-width: 260px;
+  }
+  .field:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+
+  /* Tallies */
   .tallies { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
   .tally {
     text-align: left; font: inherit; cursor: pointer;
-    background: var(--surface); border: 1px solid var(--line);
-    border-radius: var(--radius); padding: 16px 18px;
-    display: flex; flex-direction: column; gap: 2px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px 18px; display: flex; flex-direction: column; gap: 2px;
     box-shadow: var(--shadow); transition: border-color .15s ease, background .15s ease;
     position: relative; overflow: hidden;
   }
@@ -108,27 +113,22 @@
   .tally:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .tally:hover { border-color: var(--line-strong); }
 
-  /* Table */
+  /* Table shell */
   .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
   .scroll { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; min-width: 840px; }
+  table { width: 100%; border-collapse: collapse; min-width: 720px; }
   thead th {
-    position: sticky; top: 0; z-index: 1;
-    background: var(--surface-2); color: var(--ink-soft);
-    font-size: 12.5px; font-weight: 600; text-align: left;
-    padding: 12px 16px; border-bottom: 1px solid var(--line);
-    white-space: nowrap; cursor: pointer; user-select: none;
+    position: sticky; top: 0; z-index: 1; background: var(--surface-2); color: var(--ink-soft);
+    font-size: 12.5px; font-weight: 600; text-align: left; padding: 12px 16px;
+    border-bottom: 1px solid var(--line); white-space: nowrap; user-select: none;
   }
-  thead th:hover { color: var(--ink); }
+  thead th.sortable { cursor: pointer; }
+  thead th.sortable:hover { color: var(--ink); }
   thead th:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   thead th .arrow { display: inline-block; width: 12px; color: var(--accent); opacity: 0; transform: translateY(1px); }
-  thead th[aria-sort="ascending"] .arrow,
-  thead th[aria-sort="descending"] .arrow { opacity: 1; }
-  thead th.num, tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
-
+  thead th[aria-sort="ascending"] .arrow, thead th[aria-sort="descending"] .arrow { opacity: 1; }
   tbody td { padding: 13px 16px; border-bottom: 1px solid var(--line); vertical-align: middle; }
   tbody tr:last-child td { border-bottom: none; }
-  tbody tr { position: relative; }
   tbody td.loc { border-left: 4px solid var(--rc, transparent); }
   tbody tr[data-state="critical"] { --rc: var(--critical); }
   tbody tr[data-state="low"] { --rc: var(--low); }
@@ -138,8 +138,8 @@
   .room { font-weight: 600; letter-spacing: -0.01em; }
   .serial { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--ink-faint); margin-top: 2px; }
   .floor { display: inline-block; font-size: 12px; font-weight: 600; color: var(--ink-soft); background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; padding: 2px 7px; min-width: 38px; text-align: center; }
+  .tz { display: inline-block; font-size: 12.5px; color: var(--ink-soft); background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; padding: 2px 8px; margin: 1px 2px 1px 0; }
 
-  /* Battery meter */
   .battery { display: flex; align-items: center; gap: 12px; }
   .meter { display: flex; gap: 2px; width: 150px; }
   .seg { flex: 1; height: 20px; border-radius: 2px; background: var(--meter-empty); transform-origin: bottom; }
@@ -148,11 +148,9 @@
   @keyframes fill { from { transform: scaleY(0); opacity: 0; } }
   .bval { font-family: "IBM Plex Mono", monospace; font-weight: 500; font-size: 13px; color: var(--mc); min-width: 42px; }
 
-  /* Signal */
   .signal { display: inline-flex; align-items: flex-end; gap: 2px; height: 16px; }
   .sbar { width: 4px; border-radius: 1px; background: var(--meter-empty); }
-  .sbar:nth-child(1) { height: 6px; } .sbar:nth-child(2) { height: 9px; }
-  .sbar:nth-child(3) { height: 12px; } .sbar:nth-child(4) { height: 16px; }
+  .sbar:nth-child(1){height:6px;} .sbar:nth-child(2){height:9px;} .sbar:nth-child(3){height:12px;} .sbar:nth-child(4){height:16px;}
   .sbar.on { background: var(--ink-soft); }
   .sraw { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--ink-faint); margin-left: 8px; }
 
@@ -161,11 +159,9 @@
   .status.online .d { background: var(--healthy); }
   .status.offline .d { background: var(--ink-faint); }
   .status.offline { color: var(--ink-soft); }
-
   .seen { font-size: 13px; color: var(--ink-soft); white-space: nowrap; }
   .seen.stale { color: var(--low); }
 
-  /* Access dropdown */
   .access { font-size: 13px; }
   .access > summary {
     list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
@@ -178,33 +174,28 @@
   .access > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .access .caret { color: var(--ink-faint); transition: transform .15s ease; font-size: 11px; }
   .access[open] .caret { transform: rotate(180deg); }
-  .access .names {
-    margin-top: 8px; max-width: 320px; line-height: 1.5; color: var(--ink-soft);
-    background: var(--surface-2); border: 1px solid var(--line); border-radius: 7px;
-    padding: 8px 10px; white-space: normal;
-  }
-  .access .none { color: var(--ink-faint); font-size: 13px; }
+  .access .names { margin-top: 8px; max-width: 360px; line-height: 1.5; color: var(--ink-soft); background: var(--surface-2); border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; white-space: normal; }
+  .none { color: var(--ink-faint); font-size: 13px; }
 
   .msg { padding: 48px 24px; text-align: center; color: var(--ink-soft); }
   .msg.err { color: var(--critical); }
+  [hidden] { display: none !important; }
 
   @media (max-width: 560px) {
     .wrap { padding: 28px 16px 56px; }
     h1 { font-size: 23px; }
     .tally .n { font-size: 32px; }
     .meter { width: 108px; }
+    .field { min-width: 0; width: 100%; }
   }
-  @media (prefers-reduced-motion: reduce) {
-    .reveal .seg.on { animation: none; }
-    .refresh[aria-busy="true"] .dot { animation: none; }
-  }
+  @media (prefers-reduced-motion: reduce) { .reveal .seg.on { animation: none; } }
 </style>
 </head>
 <body>
   <div class="wrap">
     <header>
       <div>
-        <h1>Lock Battery Status</h1>
+        <h1 id="title">Lock Battery Status</h1>
         <div class="sub" id="sub">Reading from Net2&hellip;</div>
       </div>
       <div class="actions">
@@ -213,56 +204,91 @@
       </div>
     </header>
 
-    <div class="tallies" id="tallies" hidden>
-      <button class="tally" data-state="critical" aria-pressed="false" type="button">
-        <span class="n" id="n-critical">0</span><span class="lbl">Critical &middot; replace now</span>
-      </button>
-      <button class="tally" data-state="low" aria-pressed="false" type="button">
-        <span class="n" id="n-low">0</span><span class="lbl">Low &middot; plan a swap</span>
-      </button>
-      <button class="tally" data-state="healthy" aria-pressed="false" type="button">
-        <span class="n" id="n-healthy">0</span><span class="lbl">Healthy</span>
-      </button>
-    </div>
-
-    <div class="panel">
-      <div class="scroll">
-        <table id="tbl" hidden>
-          <thead>
-            <tr>
-              <th data-key="location" tabindex="0" scope="col">Location <span class="arrow"></span></th>
-              <th data-key="floor" tabindex="0" scope="col">Floor <span class="arrow"></span></th>
-              <th data-key="battery" tabindex="0" scope="col">Battery <span class="arrow"></span></th>
-              <th data-key="signal" tabindex="0" scope="col">Signal <span class="arrow"></span></th>
-              <th data-key="online" tabindex="0" scope="col">Status <span class="arrow"></span></th>
-              <th data-key="lastReported" tabindex="0" scope="col">Last seen <span class="arrow"></span></th>
-              <th data-key="userCount" tabindex="0" scope="col">Access <span class="arrow"></span></th>
-            </tr>
-          </thead>
-          <tbody id="rows"></tbody>
-        </table>
+    <nav class="reportnav" role="tablist" aria-label="Reports">
+      <div class="seg">
+        <button role="tab" data-report="battery" aria-selected="true">Battery status</button>
+        <button role="tab" data-report="user" aria-selected="false">Access by user</button>
+        <button role="tab" data-report="door" aria-selected="false">Access by door</button>
       </div>
-      <div class="msg" id="msg">Loading&hellip;</div>
-    </div>
+    </nav>
+
+    <!-- ============ Battery status ============ -->
+    <section id="view-battery">
+      <div class="tallies" id="tallies" hidden>
+        <button class="tally" data-state="critical" aria-pressed="false" type="button">
+          <span class="n" id="n-critical">0</span><span class="lbl">Critical &middot; replace now</span>
+        </button>
+        <button class="tally" data-state="low" aria-pressed="false" type="button">
+          <span class="n" id="n-low">0</span><span class="lbl">Low &middot; plan a swap</span>
+        </button>
+        <button class="tally" data-state="healthy" aria-pressed="false" type="button">
+          <span class="n" id="n-healthy">0</span><span class="lbl">Healthy</span>
+        </button>
+      </div>
+      <div class="panel">
+        <div class="scroll">
+          <table id="tbl" hidden>
+            <thead>
+              <tr>
+                <th class="sortable" data-key="location" tabindex="0" scope="col">Location <span class="arrow"></span></th>
+                <th class="sortable" data-key="floor" tabindex="0" scope="col">Floor <span class="arrow"></span></th>
+                <th class="sortable" data-key="battery" tabindex="0" scope="col">Battery <span class="arrow"></span></th>
+                <th class="sortable" data-key="signal" tabindex="0" scope="col">Signal <span class="arrow"></span></th>
+                <th class="sortable" data-key="online" tabindex="0" scope="col">Status <span class="arrow"></span></th>
+                <th class="sortable" data-key="lastReported" tabindex="0" scope="col">Last seen <span class="arrow"></span></th>
+                <th class="sortable" data-key="userCount" tabindex="0" scope="col">Access <span class="arrow"></span></th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+        <div class="msg" id="msg">Loading&hellip;</div>
+      </div>
+    </section>
+
+    <!-- ============ Access by user ============ -->
+    <section id="view-user" hidden>
+      <div class="picker">
+        <label for="userpick">User</label>
+        <select class="field" id="userpick"><option value="">Loading users&hellip;</option></select>
+      </div>
+      <div class="panel">
+        <div class="scroll">
+          <table id="usertbl" hidden>
+            <thead><tr><th scope="col">Door</th><th scope="col">Floor</th><th scope="col">Access window</th></tr></thead>
+            <tbody id="userrows"></tbody>
+          </table>
+        </div>
+        <div class="msg" id="usermsg">Pick a user to see which doors they can open.</div>
+      </div>
+    </section>
+
+    <!-- ============ Access by door ============ -->
+    <section id="view-door" hidden>
+      <div class="picker">
+        <input class="field" id="doorfilter" type="search" placeholder="Filter doors by name or serial&hellip;" autocomplete="off" />
+      </div>
+      <div class="panel">
+        <div class="scroll">
+          <table id="doortbl" hidden>
+            <thead><tr><th scope="col">Door</th><th scope="col">Floor</th><th scope="col">Users with access</th></tr></thead>
+            <tbody id="doorrows"></tbody>
+          </table>
+        </div>
+        <div class="msg" id="doormsg">Loading&hellip;</div>
+      </div>
+    </section>
   </div>
 
 <script>
 const STALE_MS = 7 * 24 * 60 * 60 * 1000;
-let state = { sortKey: "battery", dir: "asc", filter: null, firstPaint: true };
+let bstate = { sortKey: "battery", dir: "asc", filter: null, firstPaint: true };
 let locks = [];
+let doorAudit = [];
+let usersLoaded = false, doorLoaded = false;
 
-function batteryState(level) {
-  if (level == null) return "healthy";
-  if (level <= 2) return "critical";
-  if (level <= 4) return "low";
-  return "healthy";
-}
-function meterColor(s) {
-  return s === "critical" ? "var(--critical)" : s === "low" ? "var(--low)" : "var(--healthy)";
-}
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
-// Pull the location out of {...} or (...) — the data mixes both and some
-// pairs are mismatched, e.g. "(OFFICE 18 1FL}". Fall back to a cleaned name.
 function parseName(raw) {
   const name = (raw || "").trim();
   const m = name.match(/[\{\(\[]\s*([^\{\}\(\)\[\]]+?)\s*[\}\)\]]/);
@@ -279,84 +305,92 @@ function parseName(raw) {
   return { room, floor, floorRank };
 }
 
-function row(l) {
+function serialText(n) { return n != null ? "ACU " + String(n).padStart(8, "0") : ""; }
+
+function accessCell(userCount, users) {
+  const n = userCount || 0;
+  if (!n) return '<span class="none">No access</span>';
+  const label = n === 1 ? "1 user" : n + " users";
+  return `<details class="access"><summary>${label}<span class="caret">▾</span></summary><div class="names">${esc(users || "")}</div></details>`;
+}
+
+/* ---------- Report switching ---------- */
+function switchReport(name) {
+  document.querySelectorAll('.reportnav button').forEach(b =>
+    b.setAttribute('aria-selected', String(b.dataset.report === name)));
+  document.getElementById('view-battery').hidden = name !== 'battery';
+  document.getElementById('view-user').hidden = name !== 'user';
+  document.getElementById('view-door').hidden = name !== 'door';
+  document.getElementById('download').hidden = name !== 'battery';
+  document.getElementById('refresh').hidden = name !== 'battery';
+
+  const title = { battery: "Lock Battery Status", user: "Access by User", door: "Access by Door" }[name];
+  document.getElementById('title').textContent = title;
+
+  if (name === 'user' && !usersLoaded) loadUsers();
+  if (name === 'door' && !doorLoaded) loadDoorAudit();
+  if (name === 'user') document.getElementById('sub').textContent = "Pick a person to audit the doors they can open.";
+  if (name === 'door') document.getElementById('sub').textContent = "Every door and the active users who can open it.";
+}
+
+document.querySelectorAll('.reportnav button').forEach(b =>
+  b.addEventListener('click', () => switchReport(b.dataset.report)));
+
+/* ---------- Battery view ---------- */
+function batteryState(level) { if (level == null) return "healthy"; if (level <= 2) return "critical"; if (level <= 4) return "low"; return "healthy"; }
+function meterColor(s) { return s === "critical" ? "var(--critical)" : s === "low" ? "var(--low)" : "var(--healthy)"; }
+
+function batteryRow(l) {
   const s = batteryState(l.batteryLevel);
   const mc = meterColor(s);
   const lvl = l.batteryLevel == null ? 0 : l.batteryLevel;
   let segs = "";
   for (let i = 1; i <= 10; i++) {
     const on = i <= lvl;
-    const delay = on ? `style="animation-delay:${i * 28}ms;--mc:${mc}"` : `style="--mc:${mc}"`;
-    segs += `<div class="seg ${on ? "on" : ""}" ${delay}></div>`;
+    segs += `<div class="seg ${on ? "on" : ""}" style="${on ? `animation-delay:${i*28}ms;` : ""}--mc:${mc}"></div>`;
   }
   const bars = Math.max(0, Math.min(4, Math.ceil((l.signalStrength || 0) / 255 * 4)));
-  let sig = "";
-  for (let i = 1; i <= 4; i++) sig += `<span class="sbar ${i <= bars ? "on" : ""}"></span>`;
-
+  let sig = ""; for (let i = 1; i <= 4; i++) sig += `<span class="sbar ${i <= bars ? "on" : ""}"></span>`;
   const ts = l.lastReported ? new Date(l.lastReported) : null;
   const stale = ts && (Date.now() - ts.getTime() > STALE_MS);
   const seen = ts ? ts.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
-  const serial = l.serialNumber != null ? "ACU " + String(l.serialNumber).padStart(8, "0") : "";
-
   return `<tr data-state="${s}">
-    <td class="loc"><div class="room">${esc(l._room)}</div><div class="serial">${esc(serial)}</div></td>
+    <td class="loc"><div class="room">${esc(l._room)}</div><div class="serial">${esc(serialText(l.serialNumber))}</div></td>
     <td>${l._floor ? `<span class="floor">${esc(l._floor)}</span>` : ""}</td>
     <td><div class="battery"><div class="meter">${segs}</div><span class="bval" style="--mc:${mc}">${lvl}/10</span></div></td>
     <td><span class="signal">${sig}</span><span class="sraw">${l.signalStrength ?? "—"}</span></td>
     <td><span class="status ${l.online ? "online" : "offline"}"><span class="d"></span>${l.online ? "Online" : "Offline"}</span></td>
     <td><span class="seen ${stale ? "stale" : ""}">${esc(seen)}</span></td>
-    <td>${accessCell(l)}</td>
+    <td>${accessCell(l.userCount, l.users)}</td>
   </tr>`;
 }
 
-function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
-
-function accessCell(l) {
-  const n = l.userCount || 0;
-  if (!n) return '<span class="none">No access</span>';
-  const label = n === 1 ? "1 user" : n + " users";
-  return `<details class="access">
-    <summary>${label}<span class="caret">▾</span></summary>
-    <div class="names">${esc(l.users || "")}</div>
-  </details>`;
-}
-
-function compare(a, b) {
-  const k = state.sortKey;
-  let av, bv;
+function batteryCompare(a, b) {
+  const k = bstate.sortKey; let av, bv;
   if (k === "location") { av = a._room.toLowerCase(); bv = b._room.toLowerCase(); }
   else if (k === "floor") { av = a._floorRank; bv = b._floorRank; }
   else if (k === "online") { av = a.online ? 1 : 0; bv = b.online ? 1 : 0; }
   else if (k === "lastReported") { av = a.lastReported ? new Date(a.lastReported).getTime() : 0; bv = b.lastReported ? new Date(b.lastReported).getTime() : 0; }
   else { const f = k === "battery" ? "batteryLevel" : k === "signal" ? "signalStrength" : k; av = a[f] ?? -1; bv = b[f] ?? -1; }
-  if (av < bv) return state.dir === "asc" ? -1 : 1;
-  if (av > bv) return state.dir === "asc" ? 1 : -1;
+  if (av < bv) return bstate.dir === "asc" ? -1 : 1;
+  if (av > bv) return bstate.dir === "asc" ? 1 : -1;
   return a._room.toLowerCase() < b._room.toLowerCase() ? -1 : 1;
 }
 
-function render() {
-  const rowsEl = document.getElementById("rows");
-  const tbl = document.getElementById("tbl");
-  const msg = document.getElementById("msg");
-
+function renderBattery() {
+  const rowsEl = document.getElementById("rows"), tbl = document.getElementById("tbl"), msg = document.getElementById("msg");
   let list = locks.slice();
-  if (state.filter) list = list.filter(l => batteryState(l.batteryLevel) === state.filter);
-  list.sort(compare);
-
-  document.querySelectorAll("thead th").forEach(th => {
-    th.setAttribute("aria-sort", th.dataset.key === state.sortKey ? (state.dir === "asc" ? "ascending" : "descending") : "none");
-    th.querySelector(".arrow").textContent = th.dataset.key === state.sortKey ? (state.dir === "asc" ? "▲" : "▼") : "";
+  if (bstate.filter) list = list.filter(l => batteryState(l.batteryLevel) === bstate.filter);
+  list.sort(batteryCompare);
+  document.querySelectorAll("#tbl thead th").forEach(th => {
+    th.setAttribute("aria-sort", th.dataset.key === bstate.sortKey ? (bstate.dir === "asc" ? "ascending" : "descending") : "none");
+    th.querySelector(".arrow").textContent = th.dataset.key === bstate.sortKey ? (bstate.dir === "asc" ? "▲" : "▼") : "";
   });
-
-  if (!list.length) {
-    tbl.hidden = true; msg.hidden = false; msg.className = "msg";
-    msg.textContent = state.filter ? "No locks in this band." : "No wireless locks are reporting.";
-    return;
-  }
+  if (!list.length) { tbl.hidden = true; msg.hidden = false; msg.className = "msg"; msg.textContent = bstate.filter ? "No locks in this band." : "No wireless locks are reporting."; return; }
   tbl.hidden = false; msg.hidden = true;
-  rowsEl.innerHTML = list.map(row).join("");
-  rowsEl.classList.toggle("reveal", state.firstPaint);
-  state.firstPaint = false;
+  rowsEl.innerHTML = list.map(batteryRow).join("");
+  rowsEl.classList.toggle("reveal", bstate.firstPaint);
+  bstate.firstPaint = false;
 }
 
 function tallies() {
@@ -368,55 +402,132 @@ function tallies() {
   document.getElementById("tallies").hidden = false;
 }
 
-async function load() {
-  const btn = document.getElementById("refresh");
-  const msg = document.getElementById("msg");
+async function loadBattery() {
+  const btn = document.getElementById("refresh"), msg = document.getElementById("msg");
   btn.setAttribute("aria-busy", "true");
   try {
     const res = await fetch("/api/battery-levels");
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || "Unknown error");
-    locks = (data.levels || []).map(l => {
-      const p = parseName(l.door);
-      return { ...l, _room: p.room, _floor: p.floor, _floorRank: p.floorRank };
-    });
+    locks = (data.levels || []).map(l => { const p = parseName(l.door); return { ...l, _room: p.room, _floor: p.floor, _floorRank: p.floorRank }; });
     const when = new Date(data.fetchedAt).toLocaleString(undefined, { hour: "2-digit", minute: "2-digit" });
-    document.getElementById("sub").innerHTML = `<b>${locks.length}</b> wireless locks &middot; synced ${when} &middot; sorted by battery, lowest first`;
-    state.firstPaint = true;
-    tallies();
-    render();
+    if (!document.getElementById('view-battery').hidden)
+      document.getElementById("sub").innerHTML = `<b>${locks.length}</b> wireless locks &middot; synced ${when} &middot; sorted by battery, lowest first`;
+    bstate.firstPaint = true; tallies(); renderBattery();
   } catch (err) {
-    document.getElementById("tbl").hidden = true;
-    document.getElementById("tallies").hidden = true;
-    msg.hidden = false; msg.className = "msg err";
-    msg.textContent = "Couldn't reach the battery data. " + err.message;
-  } finally {
-    btn.removeAttribute("aria-busy");
-  }
+    document.getElementById("tbl").hidden = true; document.getElementById("tallies").hidden = true;
+    msg.hidden = false; msg.className = "msg err"; msg.textContent = "Couldn't reach the battery data. " + err.message;
+  } finally { btn.removeAttribute("aria-busy"); }
 }
 
-document.querySelectorAll("thead th").forEach(th => {
+document.querySelectorAll("#tbl thead th").forEach(th => {
   const key = th.dataset.key;
   const activate = () => {
-    if (state.sortKey === key) state.dir = state.dir === "asc" ? "desc" : "asc";
-    else { state.sortKey = key; state.dir = (key === "lastReported" || key === "battery") ? (key === "battery" ? "asc" : "desc") : "asc"; }
-    render();
+    if (bstate.sortKey === key) bstate.dir = bstate.dir === "asc" ? "desc" : "asc";
+    else { bstate.sortKey = key; bstate.dir = (key === "lastReported") ? "desc" : "asc"; }
+    renderBattery();
   };
   th.addEventListener("click", activate);
   th.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(); } });
 });
-
 document.querySelectorAll(".tally").forEach(t => {
   t.addEventListener("click", () => {
     const s = t.dataset.state;
-    state.filter = state.filter === s ? null : s;
-    document.querySelectorAll(".tally").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.state === state.filter)));
-    render();
+    bstate.filter = bstate.filter === s ? null : s;
+    document.querySelectorAll(".tally").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.state === bstate.filter)));
+    renderBattery();
   });
 });
+document.getElementById("refresh").addEventListener("click", loadBattery);
 
-document.getElementById("refresh").addEventListener("click", load);
-load();
+/* ---------- Access by user ---------- */
+async function loadUsers() {
+  usersLoaded = true;
+  const sel = document.getElementById("userpick");
+  try {
+    const res = await fetch("/api/users");
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "Unknown error");
+    const opts = ['<option value="">Select a user…</option>'];
+    data.users.forEach(u => {
+      const dept = u.department ? ` — ${u.department}` : "";
+      opts.push(`<option value="${u.userId}">${esc(u.name)}${esc(dept)}</option>`);
+    });
+    sel.innerHTML = opts.join("");
+  } catch (err) {
+    usersLoaded = false;
+    sel.innerHTML = '<option value="">Could not load users</option>';
+    document.getElementById("usermsg").textContent = "Couldn't load users. " + err.message;
+  }
+}
+
+async function loadUserDoors(userId) {
+  const tbl = document.getElementById("usertbl"), rowsEl = document.getElementById("userrows"), msg = document.getElementById("usermsg");
+  if (!userId) { tbl.hidden = true; msg.hidden = false; msg.className = "msg"; msg.textContent = "Pick a user to see which doors they can open."; return; }
+  tbl.hidden = true; msg.hidden = false; msg.className = "msg"; msg.textContent = "Loading…";
+  try {
+    const res = await fetch("/api/user-doors?userId=" + encodeURIComponent(userId));
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "Unknown error");
+    const doors = data.doors.map(d => { const p = parseName(d.peripheralName); return { ...d, ...p }; })
+      .sort((a, b) => a.floorRank - b.floorRank || a.room.toLowerCase().localeCompare(b.room.toLowerCase()));
+    if (!doors.length) { msg.textContent = "This user has no door access."; return; }
+    rowsEl.innerHTML = doors.map(d => `
+      <tr>
+        <td class="loc"><div class="room">${esc(d.room)}</div><div class="serial">${esc(serialText(d.serialNumber))}</div></td>
+        <td>${d.floor ? `<span class="floor">${esc(d.floor)}</span>` : ""}</td>
+        <td>${(d.timezones && d.timezones.length) ? d.timezones.map(t => `<span class="tz">${esc(t)}</span>`).join("") : "—"}</td>
+      </tr>`).join("");
+    tbl.hidden = false; msg.hidden = true;
+    const sel = document.getElementById("userpick");
+    const nm = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text.split(" — ")[0] : "";
+    document.getElementById("sub").innerHTML = `<b>${esc(nm)}</b> can open <b>${doors.length}</b> door${doors.length === 1 ? "" : "s"}`;
+  } catch (err) {
+    msg.className = "msg err"; msg.textContent = "Couldn't load this user's doors. " + err.message;
+  }
+}
+document.getElementById("userpick").addEventListener("change", e => loadUserDoors(e.target.value));
+
+/* ---------- Access by door ---------- */
+function renderDoorAudit() {
+  const rowsEl = document.getElementById("doorrows"), tbl = document.getElementById("doortbl"), msg = document.getElementById("doormsg");
+  const q = document.getElementById("doorfilter").value.trim().toLowerCase();
+  let list = doorAudit;
+  if (q) list = list.filter(d => d._hay.includes(q));
+  if (!list.length) { tbl.hidden = true; msg.hidden = false; msg.className = "msg"; msg.textContent = q ? "No doors match that filter." : "No doors found."; return; }
+  tbl.hidden = false; msg.hidden = true;
+  rowsEl.innerHTML = list.map(d => `
+    <tr>
+      <td class="loc"><div class="room">${esc(d._room)}</div><div class="serial">${esc(serialText(d.serialNumber))}</div></td>
+      <td>${d._floor ? `<span class="floor">${esc(d._floor)}</span>` : ""}</td>
+      <td>${accessCell(d.userCount, d.users)}</td>
+    </tr>`).join("");
+}
+
+async function loadDoorAudit() {
+  doorLoaded = true;
+  const msg = document.getElementById("doormsg");
+  try {
+    const res = await fetch("/api/door-users");
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "Unknown error");
+    doorAudit = (data.doors || []).map(d => {
+      const p = parseName(d.peripheralName);
+      return { ...d, _room: p.room, _floor: p.floor, _floorRank: p.floorRank,
+               _hay: (p.room + " " + serialText(d.serialNumber) + " " + (d.users || "")).toLowerCase() };
+    }).sort((a, b) => a._floorRank - b._floorRank || a._room.toLowerCase().localeCompare(b._room.toLowerCase()));
+    if (!document.getElementById('view-door').hidden)
+      document.getElementById("sub").textContent = `${doorAudit.length} doors`;
+    renderDoorAudit();
+  } catch (err) {
+    doorLoaded = false;
+    document.getElementById("doortbl").hidden = true; msg.hidden = false; msg.className = "msg err";
+    msg.textContent = "Couldn't load the door audit. " + err.message;
+  }
+}
+document.getElementById("doorfilter").addEventListener("input", renderDoorAudit);
+
+loadBattery();
 </script>
 </body>
 </html>

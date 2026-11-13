@@ -5,6 +5,7 @@ const { spawn } = require('child_process');
 const express = require('express');
 const { getBatteryLevels } = require('./queries/batteryLevels');
 const { getDoorAccess } = require('./queries/doorAccess');
+const { getUsers, getUserDoors, getDoorsWithUsers } = require('./queries/accessAudit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -20,6 +21,34 @@ app.get('/api/battery-levels', async (req, res) => {
       return { ...l, users: a.users, userCount: a.userCount };
     });
     res.json({ ok: true, levels: withAccess, fetchedAt: new Date().toISOString() });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/users', async (req, res) => {
+  try {
+    res.json({ ok: true, users: await getUsers() });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/user-doors', async (req, res) => {
+  const userId = Number(req.query.userId);
+  if (!Number.isInteger(userId)) {
+    return res.status(400).json({ ok: false, error: 'A numeric userId is required.' });
+  }
+  try {
+    res.json({ ok: true, doors: await getUserDoors(userId) });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/door-users', async (req, res) => {
+  try {
+    res.json({ ok: true, doors: await getDoorsWithUsers(), fetchedAt: new Date().toISOString() });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
