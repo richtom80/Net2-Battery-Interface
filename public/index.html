@@ -71,15 +71,19 @@
   h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 4px; }
   .sub { color: var(--ink-soft); font-size: 14px; }
   .sub b { color: var(--ink); font-weight: 600; }
-  .refresh {
+  .actions { display: flex; align-items: center; gap: 10px; }
+  .btn {
     display: inline-flex; align-items: center; gap: 8px;
     font: inherit; font-weight: 600; font-size: 14px;
-    color: var(--surface); background: var(--ink);
-    border: none; border-radius: 8px; padding: 9px 16px; cursor: pointer;
-    transition: opacity .15s ease;
+    border-radius: 8px; padding: 9px 16px; cursor: pointer;
+    transition: opacity .15s ease, background .15s ease, border-color .15s ease;
+    text-decoration: none;
   }
+  .refresh { color: var(--surface); background: var(--ink); border: 1px solid var(--ink); }
   .refresh:hover { opacity: .88; }
-  .refresh:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .ghost { color: var(--ink); background: transparent; border: 1px solid var(--line-strong); }
+  .ghost:hover { border-color: var(--ink); background: var(--surface); }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .refresh .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--healthy); }
   .refresh[aria-busy="true"] .dot { animation: pulse 1s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: .3; } }
@@ -183,7 +187,10 @@
         <h1>Lock Battery Status</h1>
         <div class="sub" id="sub">Reading from Net2&hellip;</div>
       </div>
-      <button class="refresh" id="refresh" type="button"><span class="dot"></span>Refresh</button>
+      <div class="actions">
+        <a class="btn ghost" id="download" href="/api/worksheet.pdf">Download worksheet (PDF)</a>
+        <button class="btn refresh" id="refresh" type="button"><span class="dot"></span>Refresh</button>
+      </div>
     </header>
 
     <div class="tallies" id="tallies" hidden>

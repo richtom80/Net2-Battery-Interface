@@ -6,6 +6,9 @@ Build a printable battery-replacement worksheet (PDF) from the JSON that
 Usage:
     python scripts/make-report.py <input.json> <output.pdf>
 
+Use "-" for <input.json> to read JSON from stdin, and "-" for <output.pdf>
+to write the PDF to stdout (used by the dashboard's download button).
+
 Each lock gets a row sorted worst-battery-first, colour-coded by status,
 with blank "Date replaced" and "Initials" boxes to fill in on the walk.
 """
@@ -220,7 +223,9 @@ if __name__ == "__main__":
     if len(sys.argv) != 3:
         print(__doc__)
         sys.exit(1)
-    with open(sys.argv[1]) as f:
-        data = json.load(f)
-    build(data, sys.argv[2])
-    print(f"Wrote {sys.argv[2]}")
+    in_arg, out_arg = sys.argv[1], sys.argv[2]
+    data = json.load(sys.stdin) if in_arg == "-" else json.load(open(in_arg))
+    out = sys.stdout.buffer if out_arg == "-" else out_arg
+    build(data, out)
+    if out_arg != "-":
+        print(f"Wrote {out_arg}")
