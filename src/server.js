@@ -62,30 +62,65 @@ function pythonCmd() {
   return fs.existsSync(venv) ? venv : 'python3';
 }
 
+function streamPdf(res, scriptArgs, payload, filename) {
+  const py = spawn(pythonCmd(), scriptArgs);
+  let errOut = '';
+  py.stderr.on('data', (d) => { errOut += d.toString(); });
+  py.on('error', (e) => {
+    if (!res.headersSent) res.status(500).json({ ok: false, error: `Could not run the PDF generator: ${e.message}` });
+  });
+  py.on('close', (code) => {
+    if (code !== 0 && !res.headersSent) {
+      res.status(500).json({ ok: false, error: `PDF generation failed. Is reportlab installed in .venv? ${errOut.trim()}` });
+    }
+  });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  py.stdout.pipe(res);
+  py.stdin.write(payload);
+  py.stdin.end();
+}
+
+const REPORT = path.join(ROOT, 'scripts', 'make-report.py');
+const ACCESS_REPORT = path.join(ROOT, 'scripts', 'make-access-report.py');
+
 app.get('/api/worksheet.pdf', async (req, res) => {
   try {
     const levels = await getBatteryLevels();
     const payload = JSON.stringify({ fetchedAt: new Date().toISOString(), levels });
-    const script = path.join(ROOT, 'scripts', 'make-report.py');
-    const py = spawn(pythonCmd(), [script, '-', '-']);
-
-    let errOut = '';
-    py.stderr.on('data', (d) => { errOut += d.toString(); });
-    py.on('error', (e) => {
-      if (!res.headersSent) res.status(500).json({ ok: false, error: `Could not run the PDF generator: ${e.message}` });
-    });
-    py.on('close', (code) => {
-      if (code !== 0 && !res.headersSent) {
-        res.status(500).json({ ok: false, error: `PDF generation failed. Is reportlab installed in .venv? ${errOut.trim()}` });
-      }
-    });
-
     const date = new Date().toISOString().slice(0, 10);
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="battery-worksheet-${date}.pdf"`);
-    py.stdout.pipe(res);
-    py.stdin.write(payload);
-    py.stdin.end();
+    streamPdf(res, [REPORT, '-', '-'], payload, `battery-worksheet-${date}.pdf`);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/user-doors.pdf', async (req, res) => {
+  const userId = Number(req.query.userId);
+  if (!Number.isInteger(userId)) {
+    return res.status(400).json({ ok: false, error: 'A numeric userId is required.' });
+  }
+  try {
+    const [users, doors] = await Promise.all([getUsers(), getUserDoors(userId)]);
+    const user = users.find((u) => u.userId === userId) || { name: `User ${userId}` };
+    const payload = JSON.stringify({ kind: 'user', generatedAt: new Date().toISOString(), user, rows: doors });
+    const safe = (user.name || 'user').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
+    streamPdf(res, [ACCESS_REPORT], payload, `access-by-user-${safe}.pdf`);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/door-users.pdf', async (req, res) => {
+  try {
+    let doors = await getDoorsWithUsers();
+    const serials = new Set(
+      String(req.query.serials || '').split(',').map((s) => Number(s)).filter(Number.isInteger)
+    );
+    if (serials.size) doors = doors.filter((d) => serials.has(d.serialNumber));
+    const payload = JSON.stringify({ kind: 'door', generatedAt: new Date().toISOString(), rows: doors });
+    const date = new Date().toISOString().slice(0, 10);
+    streamPdf(res, [ACCESS_REPORT], payload, `door-access-audit-${date}.pdf`);
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

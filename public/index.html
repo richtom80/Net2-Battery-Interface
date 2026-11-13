@@ -73,12 +73,12 @@
   .btn[hidden] { display: none; }
 
   /* Report switcher */
-  .reportnav { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; flex-wrap: wrap; }
-  .reportnav .seg { display: inline-flex; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 3px; box-shadow: var(--shadow); }
+  .reportnav { margin-bottom: 22px; line-height: normal; }
+  .reportnav .seg { display: inline-flex; align-items: center; width: fit-content; vertical-align: top; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 3px; box-shadow: var(--shadow); }
   .reportnav button {
-    font: inherit; font-weight: 600; font-size: 14px; color: var(--ink-soft);
+    font: inherit; font-weight: 600; font-size: 14px; line-height: 1.2; color: var(--ink-soft);
     background: transparent; border: none; border-radius: 7px; padding: 8px 15px; cursor: pointer;
-    transition: color .15s ease, background .15s ease;
+    white-space: nowrap; transition: color .15s ease, background .15s ease;
   }
   .reportnav button:hover { color: var(--ink); }
   .reportnav button[aria-selected="true"] { color: var(--surface); background: var(--ink); }
@@ -177,6 +177,11 @@
   .access .names { margin-top: 8px; max-width: 360px; line-height: 1.5; color: var(--ink-soft); background: var(--surface-2); border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; white-space: normal; }
   .none { color: var(--ink-faint); font-size: 13px; }
 
+  .chkcol { width: 40px; text-align: center; }
+  tbody td.chkcell { text-align: center; }
+  input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; margin: 0; }
+  .selnote { font-size: 13px; color: var(--ink-soft); margin-left: auto; }
+
   .msg { padding: 48px 24px; text-align: center; color: var(--ink-soft); }
   .msg.err { color: var(--critical); }
   [hidden] { display: none !important; }
@@ -251,6 +256,7 @@
       <div class="picker">
         <label for="userpick">User</label>
         <select class="field" id="userpick"><option value="">Loading users&hellip;</option></select>
+        <a class="btn ghost" id="userpdf" href="#" hidden>Download PDF</a>
       </div>
       <div class="panel">
         <div class="scroll">
@@ -267,11 +273,16 @@
     <section id="view-door" hidden>
       <div class="picker">
         <input class="field" id="doorfilter" type="search" placeholder="Filter doors by name or serial&hellip;" autocomplete="off" />
+        <span class="selnote" id="doorselnote">All doors</span>
+        <a class="btn ghost" id="doorpdf" href="/api/door-users.pdf">Download PDF</a>
       </div>
       <div class="panel">
         <div class="scroll">
           <table id="doortbl" hidden>
-            <thead><tr><th scope="col">Door</th><th scope="col">Floor</th><th scope="col">Users with access</th></tr></thead>
+            <thead><tr>
+              <th scope="col" class="chkcol"><input type="checkbox" id="doorall" aria-label="Select all doors" /></th>
+              <th scope="col">Door</th><th scope="col">Floor</th><th scope="col">Users with access</th>
+            </tr></thead>
             <tbody id="doorrows"></tbody>
           </table>
         </div>
@@ -463,7 +474,10 @@ async function loadUsers() {
 
 async function loadUserDoors(userId) {
   const tbl = document.getElementById("usertbl"), rowsEl = document.getElementById("userrows"), msg = document.getElementById("usermsg");
-  if (!userId) { tbl.hidden = true; msg.hidden = false; msg.className = "msg"; msg.textContent = "Pick a user to see which doors they can open."; return; }
+  const pdf = document.getElementById("userpdf");
+  if (!userId) { tbl.hidden = true; pdf.hidden = true; msg.hidden = false; msg.className = "msg"; msg.textContent = "Pick a user to see which doors they can open."; return; }
+  pdf.href = "/api/user-doors.pdf?userId=" + encodeURIComponent(userId);
+  pdf.hidden = false;
   tbl.hidden = true; msg.hidden = false; msg.className = "msg"; msg.textContent = "Loading…";
   try {
     const res = await fetch("/api/user-doors?userId=" + encodeURIComponent(userId));
@@ -489,20 +503,48 @@ async function loadUserDoors(userId) {
 document.getElementById("userpick").addEventListener("change", e => loadUserDoors(e.target.value));
 
 /* ---------- Access by door ---------- */
+let doorSel = new Set();
+let doorFiltered = [];
+
+function updateDoorSelUI() {
+  const note = document.getElementById("doorselnote"), pdf = document.getElementById("doorpdf"), all = document.getElementById("doorall");
+  const n = doorSel.size;
+  if (n === 0) { note.textContent = "All doors"; pdf.href = "/api/door-users.pdf"; pdf.textContent = "Download PDF"; }
+  else { note.textContent = n + " selected"; pdf.href = "/api/door-users.pdf?serials=" + [...doorSel].join(","); pdf.textContent = `Download PDF (${n})`; }
+  const vis = doorFiltered.map(d => d.serialNumber);
+  const selVis = vis.filter(s => doorSel.has(s)).length;
+  all.checked = vis.length > 0 && selVis === vis.length;
+  all.indeterminate = selVis > 0 && selVis < vis.length;
+}
+
 function renderDoorAudit() {
   const rowsEl = document.getElementById("doorrows"), tbl = document.getElementById("doortbl"), msg = document.getElementById("doormsg");
   const q = document.getElementById("doorfilter").value.trim().toLowerCase();
-  let list = doorAudit;
-  if (q) list = list.filter(d => d._hay.includes(q));
-  if (!list.length) { tbl.hidden = true; msg.hidden = false; msg.className = "msg"; msg.textContent = q ? "No doors match that filter." : "No doors found."; return; }
+  doorFiltered = q ? doorAudit.filter(d => d._hay.includes(q)) : doorAudit.slice();
+  if (!doorFiltered.length) { tbl.hidden = true; msg.hidden = false; msg.className = "msg"; msg.textContent = q ? "No doors match that filter." : "No doors found."; updateDoorSelUI(); return; }
   tbl.hidden = false; msg.hidden = true;
-  rowsEl.innerHTML = list.map(d => `
+  rowsEl.innerHTML = doorFiltered.map(d => `
     <tr>
+      <td class="chkcell"><input type="checkbox" class="doorchk" value="${d.serialNumber}" ${doorSel.has(d.serialNumber) ? "checked" : ""} aria-label="Select ${esc(d._room)}" /></td>
       <td class="loc"><div class="room">${esc(d._room)}</div><div class="serial">${esc(serialText(d.serialNumber))}</div></td>
       <td>${d._floor ? `<span class="floor">${esc(d._floor)}</span>` : ""}</td>
       <td>${accessCell(d.userCount, d.users)}</td>
     </tr>`).join("");
+  updateDoorSelUI();
 }
+
+document.getElementById("doorrows").addEventListener("change", e => {
+  if (!e.target.classList.contains("doorchk")) return;
+  const s = Number(e.target.value);
+  if (e.target.checked) doorSel.add(s); else doorSel.delete(s);
+  updateDoorSelUI();
+});
+document.getElementById("doorall").addEventListener("change", e => {
+  const check = e.target.checked;
+  doorFiltered.forEach(d => { if (check) doorSel.add(d.serialNumber); else doorSel.delete(d.serialNumber); });
+  document.querySelectorAll("#doorrows .doorchk").forEach(cb => { cb.checked = check; });
+  updateDoorSelUI();
+});
 
 async function loadDoorAudit() {
   doorLoaded = true;
